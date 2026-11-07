@@ -2,6 +2,10 @@
 
 一个浮在 DeepSeek Harness Web GUI 之上的客户端仪表盘（HUD）：实时显示会话工作状态、账户余额、token 用量与按模型估算的费用。
 
+<p align="center">
+  <img src="docs/screenshot.png" alt="Work dashboard panel" width="400">
+</p>
+
 - 速度表（tokens/s，带主/辅刻度）
 - IN / OUT / TOTAL 与缓存命中率
 - DeepSeek 平台账户余额（读不到时显示 `-`）
