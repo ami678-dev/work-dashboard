@@ -1,0 +1,3 @@
+- insert:
+    - id: work-dashboard
+      name: '@local/work-dashboard'

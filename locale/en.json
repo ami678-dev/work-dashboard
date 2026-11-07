@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Work dashboard",
+    "description": "A compact cockpit-style HUD: elapsed seconds, cache-hit rate, a tokens-per-second gauge, IN/OUT/TOTAL token counts, and account balance. Collapses into a panda badge."
+  }
+}
