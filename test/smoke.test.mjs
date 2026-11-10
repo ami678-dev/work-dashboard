@@ -285,7 +285,7 @@ check('live usage read for running and usage-less sessions', state.projectionsRe
   && state.projectionsRequests.map((entry) => entry.sessionId).sort().join(',') === 's1,s3,s4', JSON.stringify(state.projectionsRequests));
 check('account watch opened once', state.watchCalls === 1, String(state.watchCalls));
 check('getBalance carries build version and locale', state.balanceCalls.length === 1
-  && state.balanceCalls[0].version === '0.2.3'
+  && state.balanceCalls[0].version === '0.2.4'
   && state.balanceCalls[0].locale === 'en'
   && state.balanceCalls[0].timezoneOffsetSeconds === -new Date().getTimezoneOffset() * 60,
 JSON.stringify(state.balanceCalls[0] || null));

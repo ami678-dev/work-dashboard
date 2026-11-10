@@ -25,7 +25,7 @@ window.__ModuleLoader__.load({
       'xiaomi/mimo-v2.6-pro': { input: 3, output: 6, cacheRead: 0.025, cacheWrite: 3 },
       'xiaomi/mimo-v2.6-pro-ultraspeed': { input: 30, output: 60, cacheRead: 0.25, cacheWrite: 30 },
     };
-    const BUILD_VERSION = '0.2.3';
+    const BUILD_VERSION = '0.2.4';
     const MIN_W = 216;
     const MIN_H = 84;
     const MAX_MARGIN = 16;
@@ -167,7 +167,7 @@ window.__ModuleLoader__.load({
     })();
 
     const CSS = `
-.wdb-panel{position:fixed;display:flex;flex-direction:column;min-width:${MIN_W}px;min-height:${MIN_H}px;box-sizing:border-box;background:var(--dsw-alias-bg-overlay);border:var(--dsh-hairline-width,.5px) solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-xl,14px);box-shadow:var(--dsw-elevation-panel,none);color:var(--dsw-alias-label-primary);font-size:11px;line-height:16px;overflow:hidden;container-type:inline-size}
+.wdb-panel{position:fixed;display:flex;flex-direction:column;min-width:${MIN_W}px;min-height:${MIN_H}px;box-sizing:border-box;background:var(--dsw-alias-bg-overlay);border:var(--dsh-hairline-width,.5px) solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-xl,14px);box-shadow:var(--dsw-elevation-panel,none);color:var(--dsw-alias-label-primary);font-size:11px;line-height:16px;overflow:hidden;container-type:inline-size;-webkit-app-region:no-drag}
 .wdb-head{display:flex;align-items:center;gap:4px;padding:3px 7px;border-bottom:var(--dsh-hairline-width,.5px) solid var(--dsw-alias-border-l1);cursor:move;touch-action:none;user-select:none;-webkit-user-select:none;flex:none}
 .wdb-head-icon{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:20px;height:20px;padding:0;border:none;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;flex:none}
 .wdb-head-icon:hover{background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-2))}
@@ -209,11 +209,11 @@ window.__ModuleLoader__.load({
 .wdb-btn:hover{background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-2))}
 .wdb-resize{position:absolute;right:2px;bottom:2px;width:11px;height:11px;cursor:nwse-resize;touch-action:none;border-radius:0 0 var(--dsw-radius-xl,14px) 0;opacity:.5;transition:opacity .12s;background-image:radial-gradient(var(--dsw-alias-border-l2) 1px,transparent 1.2px);background-size:5px 5px;background-position:2px 2px}
 .wdb-resize:hover{opacity:1}
-.wdb-badge{position:fixed;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:4px 0;border:var(--dsh-hairline-width,.5px) solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-xl,14px);background:var(--dsw-alias-bg-overlay);box-shadow:var(--dsw-elevation-panel,none);color:var(--dsw-alias-label-primary);cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none}
+.wdb-badge{position:fixed;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:4px 0;border:var(--dsh-hairline-width,.5px) solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-xl,14px);background:var(--dsw-alias-bg-overlay);box-shadow:var(--dsw-elevation-panel,none);color:var(--dsw-alias-label-primary);cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-app-region:no-drag}
 .wdb-badge:hover{background:var(--dsw-alias-bg-layer-1)}
 .wdb-badge-icon{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--dsw-alias-bg-layer-2);flex:none}
 .wdb-badge-value{font-size:10px;line-height:14px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary)}
-.wdb-launcher{box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;min-width:0;padding:7px 10px;border:none;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:13px;line-height:20px;text-align:left}
+.wdb-launcher{box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;min-width:0;padding:7px 10px;border:none;border-radius:var(--dsw-radius-md,8px);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:13px;line-height:20px;text-align:left;-webkit-app-region:no-drag}
 .wdb-launcher:hover{background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-1))}
 .wdb-launcher[aria-pressed="true"]{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-brand-primary)}
 .wdb-launcher-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -287,23 +287,43 @@ window.__ModuleLoader__.load({
       return Math.min(Math.max(value, min), max);
     }
 
+    /**
+     * Height of the desktop shell's custom titlebar. On Windows its
+     * `-webkit-app-region: drag` strip and the native caption buttons occupy
+     * that band, so a panel parked underneath cannot be dragged or clicked.
+     * The web GUI has neither attribute nor variable and returns 0.
+     */
+    function titlebarInset() {
+      try {
+        const root = document.documentElement;
+        if (!root || root.hasAttribute('data-fullscreen')) return 0;
+        if (!root.hasAttribute('data-windows-titlebar')) return 0;
+        const value = Number.parseFloat(root.style.getPropertyValue('--dsh-windows-titlebar-height'));
+        return Number.isFinite(value) && value > 0 ? value : 0;
+      } catch (_error) {
+        return 0;
+      }
+    }
+
     /** Fit the expanded panel to the viewport: size first, then a fully on-screen position. */
     function fitGeo(geo) {
+      const top = titlebarInset();
       const w = clamp(geo.w, MIN_W, Math.max(MIN_W, window.innerWidth - MAX_MARGIN));
-      const hgt = clamp(geo.h, MIN_H, Math.max(MIN_H, window.innerHeight - MAX_MARGIN));
+      const hgt = clamp(geo.h, MIN_H, Math.max(MIN_H, window.innerHeight - MAX_MARGIN - top));
       return {
         w,
         h: hgt,
         x: clamp(geo.x, 0, Math.max(0, window.innerWidth - MAX_MARGIN - w)),
-        y: clamp(geo.y, 0, Math.max(0, window.innerHeight - MAX_MARGIN - hgt)),
+        y: clamp(geo.y, top, Math.max(top, window.innerHeight - MAX_MARGIN - hgt)),
       };
     }
 
     /** Fit the collapsed badge's top-left to the viewport. The badge's size is fixed; `geo` keeps the panel's own width/height, so collapsing must never overwrite them. */
     function fitBadge(geo) {
+      const top = titlebarInset();
       return {
         x: clamp(geo.x, 0, Math.max(0, window.innerWidth - MAX_MARGIN - BADGE_W)),
-        y: clamp(geo.y, 0, Math.max(0, window.innerHeight - MAX_MARGIN - BADGE_H)),
+        y: clamp(geo.y, top, Math.max(top, window.innerHeight - MAX_MARGIN - BADGE_H)),
       };
     }
 
@@ -467,7 +487,7 @@ window.__ModuleLoader__.load({
       // The badge anchors the HUD's top-right corner; the panel opens down-left,
       // so the default parking spot is the screen's top-right (a bottom park
       // would push the downward-opening panel off screen).
-      return { w, h: hgt, x: window.innerWidth - BADGE_W - 20, y: 20 };
+      return { w, h: hgt, x: window.innerWidth - BADGE_W - 20, y: Math.max(20, titlebarInset() + 8) };
     }
 
     /** Totals over every known session; the HUD describes the plugin's whole view. */
@@ -519,7 +539,10 @@ window.__ModuleLoader__.load({
         try {
           event.currentTarget.setPointerCapture(event.pointerId);
         } catch (_error) {}
-        dragRef.current = { px: event.clientX, py: event.clientY, anchor: { x: geo.x, y: geo.y } };
+        // The stored anchor IS the badge corner, so moving it by the pointer
+        // delta is exact whatever the panel's content-driven size is. Start from
+        // the displayed (fitted) corner: a stale saved y may have been clamped.
+        dragRef.current = { px: event.clientX, py: event.clientY, anchor: { x: geo.x, y: rect.y } };
         event.preventDefault();
       };
       const onHeadMove = (event) => {
@@ -735,8 +758,8 @@ window.__ModuleLoader__.load({
         'aria-label': t('title'),
         'data-collapsed': snap.collapsed ? 'true' : 'false',
         style: {
-          right: `${Math.max(0, window.innerWidth - (geo.x + BADGE_W))}px`,
-          top: `${geo.y}px`,
+          right: `${Math.max(0, window.innerWidth - (rect.x + rect.w))}px`,
+          top: `${rect.y}px`,
           // Content-driven until the user drags the grip, so no fixed box can
           // leave empty space at the bottom or right. The top-right corner is
           // pinned, so the panel grows down and to the left of the badge.
@@ -918,6 +941,7 @@ window.__ModuleLoader__.load({
         rows: 0, known: 0, output: 0, elapsedSec: 0, speed: 0, lastOkAt: 0,
         accountStatus: null, balanceState: null, wallets: 0,
         costTotal: 0, costPriced: 0, costUnpriced: 0,
+        titlebarInset: 0, panelTop: 0,
       };
       const publishDiag = () => {
         try {
@@ -928,6 +952,8 @@ window.__ModuleLoader__.load({
           diag.costTotal = snap.cost.total;
           diag.costPriced = snap.cost.priced;
           diag.costUnpriced = snap.cost.unpriced;
+          diag.titlebarInset = titlebarInset();
+          diag.panelTop = snap.geo ? fitGeo(panelRect(snap.geo)).y : 0;
           window.localStorage.setItem(DIAG_KEY, JSON.stringify(diag));
         } catch (_error) {}
       };
