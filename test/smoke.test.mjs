@@ -44,7 +44,7 @@ globalThis.window = {
   innerWidth: 1600,
   innerHeight: 900,
   // Shorten the plugin's timing guards so the stall/idle/stale paths run fast.
-  __WDB_TIMING__: { refresh: 300, idle: 1500, stale: 200 },
+  __WDB_TIMING__: { refresh: 300, idle: 1500, stale: 200, fastWindow: 2500, slowWindow: 8000 },
   addEventListener(type, listener) {
     windowListeners[type] = listener;
   },
@@ -119,7 +119,15 @@ const projectionsResponses = {
   s4: { ok: true, value: { asOfSeq: 7, values: { tokenUsage: { uncachedInputTokens: 10, outputTokens: 20, cacheReadTokens: 30, cacheWriteTokens: 40 } } } },
 };
 
-const watchFrames = [{ status: 'credential-stored', links: { usageUrl: 'u', topUpUrl: 't' }, attempt: null }];
+// Both frame shapes: older hosts streamed the state itself, current hosts wrap
+// it as `{ type, state }`.
+const watchFrames = [
+  { status: 'credential-stored', links: { usageUrl: 'u', topUpUrl: 't' }, attempt: null },
+  {
+    type: 'credentials-changed',
+    state: { status: 'credential-stored', links: { usageUrl: 'u', topUpUrl: 't' }, attempt: null },
+  },
+];
 const balanceResult = {
   ok: true,
   value: {
@@ -284,8 +292,10 @@ check('list paged with cursor across two calls', state.listRequests.length === 2
 check('live usage read for running and usage-less sessions', state.projectionsRequests.length === 3
   && state.projectionsRequests.map((entry) => entry.sessionId).sort().join(',') === 's1,s3,s4', JSON.stringify(state.projectionsRequests));
 check('account watch opened once', state.watchCalls === 1, String(state.watchCalls));
-check('getBalance carries build version and locale', state.balanceCalls.length === 1
-  && state.balanceCalls[0].version === '0.2.4'
+check('both account frame shapes trigger a balance read', state.balanceCalls.length === 2,
+  String(state.balanceCalls.length));
+check('getBalance carries build version and locale', state.balanceCalls.length > 0
+  && state.balanceCalls[0].version === '0.2.7'
   && state.balanceCalls[0].locale === 'en'
   && state.balanceCalls[0].timezoneOffsetSeconds === -new Date().getTimezoneOffset() * 60,
 JSON.stringify(state.balanceCalls[0] || null));
@@ -407,6 +417,10 @@ check('elapsed chip shows seconds', chipText.includes('0s'), chipText);
 check('hit-rate chip shows a percentage', chipText.includes('88%'), chipText);
 const gauge = findNode(tree, (node) => node.props && node.props.role === 'img');
 check('speed gauge exposes its value', gauge && gauge.props['aria-label'] === 'Speed 0.0 t/s', gauge ? gauge.props['aria-label'] : 'gauge missing');
+check('gauge pivot gets a breathing halo while work runs', !!gauge
+  && gauge.props['data-running'] === 'true'
+  && findAll(gauge, (node) => node.props && node.props.className === 'wdb-gauge-pulse', []).length === 1,
+gauge ? `${gauge.props['data-running']} / pulse=${findAll(gauge, (node) => node.props && node.props.className === 'wdb-gauge-pulse', []).length}` : 'gauge missing');
 const gaugeGradient = findNode(tree, (node) => node.type === 'linearGradient');
 const gradientStops = gaugeGradient ? findAll(gaugeGradient, (node) => node.type === 'stop', []) : [];
 check('gauge colour is one smooth gradient', gradientStops.length === 3
@@ -615,6 +629,18 @@ check('running work polls usage on the ticker', state.listRequests.length > befo
 const speedNow = injected.view.getSnapshot().speed;
 check('observed output speed becomes positive', Number.isFinite(speedNow) && speedNow > 0, String(speedNow));
 
+// Local providers (Ollama) settle usage only at the end of an attempt: the fast
+// window stays flat between settlements, so the needle must fall back to the
+// run's average instead of dropping to zero while tokens still stream.
+liveS1Output = 2678;
+await sleep(2600); // drain growth out of the fast window (2.5s in this harness)
+listQueue.length = 0;
+for (let index = 0; index < 6; index += 1) listQueue.push(onePage(raised(2678)));
+injected.actions.refresh();
+await sleep(700);
+const slowSpeed = injected.view.getSnapshot().speed;
+check('speed keeps a slow-window average between usage settlements', slowSpeed > 0, String(slowSpeed));
+
 // A newly started parallel session must not restart the work clock.
 const elapsedBefore = injected.view.getSnapshot().elapsedSec;
 listQueue.length = 0;
@@ -752,7 +778,8 @@ const ollamaRow = {
   sessionId: 'o1', running: false, blank: false, updatedAt: 3000,
   projections: { values: {
     title: 'Local',
-    modelSelection: { lastUsed: { provider: 'ollama', model: 'lfm3-omni:latest' }, next: null },
+    // Profiles expose Ollama as an OpenAI-compatible endpoint named `local-ollama`.
+    modelSelection: { lastUsed: { provider: 'local-ollama', model: 'lfm3-omni:latest' }, next: null },
     tokenUsage: { uncachedInputTokens: 5000000, outputTokens: 5000000, cacheReadTokens: 0, cacheWriteTokens: 0 },
   } },
 };

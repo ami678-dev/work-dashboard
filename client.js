@@ -15,8 +15,12 @@ window.__ModuleLoader__.load({
     const PRICE_KEY = 'dsh.work-dashboard.prices.v1';
     // The DeepSeek platform account has a real balance; those sessions are priced by it.
     const DEEPSEEK_PROVIDER = 'deepseek-account';
-    // Local models run on this machine and bill nothing: no estimate, no price row.
-    const UNMETERED_PROVIDERS = new Set(['ollama']);
+    // Local models run on this machine and bill nothing: no estimate, no price
+    // row. The built-in provider is `ollama`; profiles often expose Ollama's
+    // OpenAI-compatible endpoint under a name like `local-ollama`, so match any
+    // provider containing "ollama".
+    const isUnmeteredProvider = (provider) => typeof provider === 'string'
+      && provider.toLowerCase().includes('ollama');
     // List prices in CNY per 1,000,000 tokens, filled in until the user overrides
     // them in the ¥ dialog. Source: mimo.mi.com pay-as-you-go page (real-time
     // tier, 2026-11). Cache writes are billed at the cache-miss input rate.
@@ -25,7 +29,7 @@ window.__ModuleLoader__.load({
       'xiaomi/mimo-v2.6-pro': { input: 3, output: 6, cacheRead: 0.025, cacheWrite: 3 },
       'xiaomi/mimo-v2.6-pro-ultraspeed': { input: 30, output: 60, cacheRead: 0.25, cacheWrite: 30 },
     };
-    const BUILD_VERSION = '0.2.4';
+    const BUILD_VERSION = '0.2.7';
     const MIN_W = 216;
     const MIN_H = 84;
     const MAX_MARGIN = 16;
@@ -38,8 +42,6 @@ window.__ModuleLoader__.load({
     // column. There is no pin toggle; this value is fixed.
     const Z_INDEX = 400;
     const TICK_MS = 1000;
-    const SAMPLE_WINDOW_MS = 10000;
-    const SAMPLE_MAX = 8;
     const FALLBACK_USAGE_ROWS = 12;
     const FALLBACK_USAGE_CHUNK = 4;
     const EVENT_REFRESH_DEBOUNCE_MS = 500;
@@ -60,6 +62,14 @@ window.__ModuleLoader__.load({
     const REFRESH_TIMEOUT_MS = TIMING.refresh;
     const IDLE_POLL_MS = TIMING.idle;
     const STALE_MS = TIMING.stale;
+    // Speed is derived from provider-reported output tokens. Cloud providers
+    // settle usage per attempt, but a local Ollama endpoint only reports it at
+    // the end of a (possibly long) generation, so the fast window can be empty
+    // for many seconds. The slow window keeps the needle on the running average
+    // instead of dropping it to zero between settlements.
+    const SAMPLE_WINDOW_MS = TIMING.fastWindow || 10000;
+    const SAMPLE_SLOW_WINDOW_MS = TIMING.slowWindow || 60000;
+    const SAMPLE_MAX = 40;
     const GAUGE_MAX = 100;
 
     const en = {
@@ -188,8 +198,11 @@ window.__ModuleLoader__.load({
 .wdb-gauge-tick-major{stroke:var(--dsw-alias-label-tertiary);stroke-width:1.2}
 .wdb-gauge-needle{stroke:var(--dsw-alias-brand-primary);stroke-width:2;stroke-linecap:round;transition:transform .45s ease-out}
 .wdb-gauge-hub{fill:var(--dsw-alias-brand-primary)}
+.wdb-gauge-pulse{fill:var(--dsw-alias-brand-primary);opacity:0;transform-box:fill-box;transform-origin:center}
+.wdb-gauge[data-running="true"] .wdb-gauge-pulse{animation:wdb-hub-pulse 1.8s ease-in-out infinite}
+@keyframes wdb-hub-pulse{0%,100%{opacity:.06;transform:scale(1)}50%{opacity:.4;transform:scale(2.4)}}
 .wdb-gauge-value{position:absolute;left:0;right:0;top:12px;text-align:center;font-size:13px;line-height:17px;font-weight:600;font-variant-numeric:tabular-nums}
-.wdb-gauge-unit{position:absolute;left:0;right:0;top:28px;text-align:center;font-size:8px;line-height:11px;color:var(--dsw-alias-label-secondary)}
+.wdb-gauge-unit{position:absolute;left:0;right:0;top:35px;text-align:center;font-size:8px;line-height:11px;color:var(--dsw-alias-label-secondary)}
 .wdb-metrics{display:flex;flex-direction:column;gap:2px;min-width:0}
 .wdb-metric{display:flex;align-items:baseline;justify-content:space-between;gap:4px;min-height:14px}
 .wdb-metric-label{font-size:9px;line-height:12px;color:var(--dsw-alias-label-secondary);letter-spacing:.02em;flex:none}
@@ -226,7 +239,7 @@ window.__ModuleLoader__.load({
 .wdb-price-field span{flex:none;width:30px}
 .wdb-price-field input{box-sizing:border-box;width:100%;min-width:0;height:18px;padding:0 4px;font:inherit;font-size:10px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1);border:var(--dsh-hairline-width,.5px) solid var(--dsw-alias-border-l1);border-radius:4px}
 .wdb-prices-actions{display:flex;gap:6px;justify-content:flex-end;padding-top:2px}
-@media (prefers-reduced-motion: reduce){.wdb-gauge-needle{transition:none}.wdb-resize{transition:none}}
+@media (prefers-reduced-motion: reduce){.wdb-gauge-needle{transition:none}.wdb-gauge[data-running="true"] .wdb-gauge-pulse{animation:none}.wdb-resize{transition:none}}
 `;
 
     function group(intText) {
@@ -381,6 +394,11 @@ window.__ModuleLoader__.load({
       return h('div', {
         className: 'wdb-gauge',
         role: 'img',
+        // A breathing halo on the pivot while work runs: local models report
+        // usage only when an attempt settles, so the needle can sit still for a
+        // long thinking phase — this shows the HUD is alive without faking a
+        // token rate.
+        'data-running': props.running ? 'true' : 'false',
         'aria-label': `${props.label} ${speed.toFixed(1)} ${props.unit}`,
       },
         h('svg', { className: 'wdb-gauge-svg', viewBox: '0 0 60 48', 'aria-hidden': 'true' },
@@ -409,6 +427,7 @@ window.__ModuleLoader__.load({
             // end, exactly over the drawn arc.
             transform: `rotate(${(180 - (gauge.startAngle - gauge.sweep * ratio)).toFixed(2)} ${gauge.cx} ${gauge.cy})`,
           }),
+          h('circle', { className: 'wdb-gauge-pulse', cx: gauge.cx, cy: gauge.cy, r: 2.4 }),
           h('circle', { className: 'wdb-gauge-hub', cx: gauge.cx, cy: gauge.cy, r: 2.4 })
         ),
         h('span', { className: 'wdb-gauge-value' }, speed.toFixed(1)),
@@ -526,6 +545,7 @@ window.__ModuleLoader__.load({
 
       const tag = props.localeTag ? props.localeTag() : undefined;
       const rows = snap.sessions.rows || [];
+      const running = rows.some((row) => row.running);
       const totals = sumUsage(rows);
       const speed = Number(snap.speed) || 0;
       const elapsed = Number(snap.elapsedSec) || 0;
@@ -703,7 +723,7 @@ window.__ModuleLoader__.load({
         const seen = new Map();
         for (const row of rows) {
           if (!row.provider || !row.model) continue;
-          if (row.provider === DEEPSEEK_PROVIDER || UNMETERED_PROVIDERS.has(row.provider)) continue;
+          if (row.provider === DEEPSEEK_PROVIDER || isUnmeteredProvider(row.provider)) continue;
           const key = `${row.provider}/${row.model}`;
           if (!seen.has(key)) seen.set(key, key);
         }
@@ -811,7 +831,7 @@ window.__ModuleLoader__.load({
         ),
         h('div', { className: 'wdb-body' },
           snap.priceOpen ? priceEditor : h('div', { className: 'wdb-hero' },
-            h(SpeedGauge, { speed, label: t('speedLabel'), unit: t('speedUnit') }),
+            h(SpeedGauge, { speed, running, label: t('speedLabel'), unit: t('speedUnit') }),
             h('div', { className: 'wdb-metrics' },
               h(MetricRow, { label: t('input'), value: totals.known ? formatTokens(totals.input) : '—', title: group(totals.input) }),
               h(MetricRow, { label: t('output'), value: totals.known ? formatTokens(totals.output) : '—', title: group(totals.output) }),
@@ -941,7 +961,7 @@ window.__ModuleLoader__.load({
         rows: 0, known: 0, output: 0, elapsedSec: 0, speed: 0, lastOkAt: 0,
         accountStatus: null, balanceState: null, wallets: 0,
         costTotal: 0, costPriced: 0, costUnpriced: 0,
-        titlebarInset: 0, panelTop: 0,
+        titlebarInset: 0, panelTop: 0, runningModels: '',
       };
       const publishDiag = () => {
         try {
@@ -954,6 +974,10 @@ window.__ModuleLoader__.load({
           diag.costUnpriced = snap.cost.unpriced;
           diag.titlebarInset = titlebarInset();
           diag.panelTop = snap.geo ? fitGeo(panelRect(snap.geo)).y : 0;
+          diag.runningModels = (snap.sessions.rows || [])
+            .filter((row) => row.running)
+            .map((row) => `${row.provider || '?'}/${row.model || '?'}`)
+            .join(',');
           window.localStorage.setItem(DIAG_KEY, JSON.stringify(diag));
         } catch (_error) {}
       };
@@ -977,14 +1001,13 @@ window.__ModuleLoader__.load({
         const now = Date.now();
         samples.push({ at: now, output: Number(outputTotal) || 0 });
         while (samples.length > SAMPLE_MAX) samples.shift();
-        while (samples.length > 2 && now - samples[0].at > SAMPLE_WINDOW_MS) samples.shift();
+        while (samples.length > 2 && now - samples[0].at > SAMPLE_SLOW_WINDOW_MS) samples.shift();
       };
 
-      /** Observed output-token speed over the trailing sample window; 0 when idle. */
-      const computeSpeed = (hasRunning) => {
-        if (!hasRunning || samples.length < 2) return 0;
+      /** Output tokens per second over `windowMs`, or 0 without a measurable delta. */
+      const speedOver = (windowMs) => {
         const now = Date.now();
-        const fresh = samples.filter((sample) => now - sample.at <= SAMPLE_WINDOW_MS);
+        const fresh = samples.filter((sample) => now - sample.at <= windowMs);
         if (fresh.length < 2) return 0;
         const first = fresh[0];
         const last = fresh[fresh.length - 1];
@@ -994,9 +1017,23 @@ window.__ModuleLoader__.load({
         return Math.round((output / seconds) * 10) / 10;
       };
 
+      /** Observed output-token speed; 0 when idle. */
+      const computeSpeed = (hasRunning) => {
+        if (!hasRunning || samples.length < 2) return 0;
+        const fast = speedOver(SAMPLE_WINDOW_MS);
+        if (fast > 0) return fast;
+        // Providers that settle usage per attempt (local Ollama) leave the fast
+        // window flat between settlements; fall back to the run's average.
+        return speedOver(SAMPLE_SLOW_WINDOW_MS);
+      };
+
       const trackRunning = (rows) => {
         const runningCount = rows.filter((row) => row.running).length;
-        if (runningCount > 0 && workStartedAt === 0) workStartedAt = Date.now();
+        if (runningCount > 0 && workStartedAt === 0) {
+          workStartedAt = Date.now();
+          // A new run must not inherit the previous run's samples.
+          samples.length = 0;
+        }
         if (runningCount === 0) workStartedAt = 0;
       };
 
@@ -1037,7 +1074,7 @@ window.__ModuleLoader__.load({
         for (const row of rows) {
           if (!row.usage || !row.provider || !row.model) continue;
           if (row.provider === DEEPSEEK_PROVIDER) continue; // the real balance covers it
-          if (UNMETERED_PROVIDERS.has(row.provider)) continue; // local: nothing billed
+          if (isUnmeteredProvider(row.provider)) continue; // local: nothing billed
           const buckets = {
             input: Number(row.usage.uncachedInputTokens) || 0,
             output: Number(row.usage.outputTokens) || 0,
@@ -1255,7 +1292,10 @@ window.__ModuleLoader__.load({
         if (runningRows.length) {
           // Continuous work window: starting or finishing a parallel session does
           // not restart the clock; only the whole fleet going idle does.
-          if (workStartedAt === 0) workStartedAt = Date.now();
+          if (workStartedAt === 0) {
+            workStartedAt = Date.now();
+            samples.length = 0;
+          }
           elapsed = Math.max(0, Math.floor((Date.now() - workStartedAt) / 1000));
         } else {
           workStartedAt = 0;
@@ -1444,16 +1484,27 @@ window.__ModuleLoader__.load({
         }
         let generation = 0;
         let handle = null;
+        let controller = null;
         const start = () => {
           const mine = ++generation;
+          try {
+            if (controller) controller.abort();
+          } catch (_error) {}
+          controller = new AbortController();
+          const signal = controller.signal;
           (async () => {
             try {
-              const stream = accountNs.watch();
+              const stream = accountNs.watch(signal);
               handle = stream;
-              for await (const viewValue of stream) {
+              for await (const frame of stream) {
                 if (mine !== generation || !lifetime.alive) break;
-                store.patch({ account: { available: true, status: viewValue && viewValue.status ? viewValue.status : null } });
-                if (viewValue && viewValue.status === 'credential-stored') void refreshBalance();
+                // dsh >= 0.2.3 streams `{ type, state }`; older builds streamed
+                // the state itself. Reading only `frame.status` silently left the
+                // account unknown and the balance at idle on the new shape.
+                const view = frame && frame.state && typeof frame.state === 'object' ? frame.state : frame;
+                const status = view && typeof view.status === 'string' ? view.status : null;
+                store.patch({ account: { available: true, status } });
+                if (status === 'credential-stored') void refreshBalance();
                 else store.patch({ balance: { state: 'idle', wallets: [], bonus: [] } });
               }
             } catch (error) {
@@ -1471,6 +1522,9 @@ window.__ModuleLoader__.load({
           generation += 1;
           try {
             offReset();
+          } catch (_error) {}
+          try {
+            if (controller) controller.abort();
           } catch (_error) {}
           if (handle && typeof handle.dispose === 'function') {
             try {
