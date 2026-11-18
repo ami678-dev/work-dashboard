@@ -1,12 +1,15 @@
 {
-  "name": "@local/work-dashboard",
+  "name": "dsh-work-dashboard",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "scripts": {
     "test": "node test/smoke.test.mjs"
   },
   "description": "Floating work dashboard for the Harness Web GUI: session work status, account balance, token usage, and per-model cost estimates in a draggable, resizable panel.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ami678-dev/work-dashboard.git"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

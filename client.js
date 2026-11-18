@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-  id: '@local/work-dashboard',
+  id: 'dsh-work-dashboard',
   factory(require) {
     const React = require('react');
     const h = React.createElement;

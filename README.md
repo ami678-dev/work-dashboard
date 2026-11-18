@@ -15,32 +15,38 @@
 
 ## 安装
 
-1. 将本仓库放到任意目录，例如 `~/dsh-plugins/work-dashboard`。
-2. 在 dsh profile 的 `package.json`（例如 `~/.dsh/profiles/desktop/package.json`）中注册为本地依赖：
+从插件市场安装，或从 npm：
 
-   ```json
-   {
-     "dependencies": {
-       "@local/work-dashboard": "link:~/dsh-plugins/work-dashboard"
-     }
-   }
-   ```
+```text
+dsh plugin add dsh-work-dashboard
+```
 
-3. 把插件加入该 profile 的 bundle 列表：
+本地开发时，将本仓库放到任意目录，例如 `~/dsh-plugins/work-dashboard`，
+再在 dsh profile 的 `package.json`（例如 `~/.dsh/profiles/desktop/package.json`）中注册为本地依赖：
 
-   ```json
-   {
-     "dsh": {
-       "profile": {
-         "bundles": [
-           "@deepseek-ai/dsh-base",
-           "@deepseek-ai/dsh-web-app",
-           "@local/work-dashboard"
-         ]
-       }
-     }
-   }
-   ```
+```json
+{
+  "dependencies": {
+    "dsh-work-dashboard": "link:~/dsh-plugins/work-dashboard"
+  }
+}
+```
+
+然后把插件加入该 profile 的 bundle 列表：
+
+```json
+{
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "dsh-work-dashboard"
+      ]
+    }
+  }
+}
+```
 
 4. 重启 dsh（profile 配置了 `patchReload: live` 时保存即生效）。
 

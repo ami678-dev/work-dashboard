@@ -1,4 +1,4 @@
-// Headless smoke test for the @local/work-dashboard client module.
+// Headless smoke test for the dsh-work-dashboard client module.
 // Loads client.js with a stubbed ModuleLoader and React, runs apply() against
 // a mock Cordis ctx, then exercises the data pipeline and component output.
 // This tests the plugin code only; it is NOT visual verification of the page.
@@ -75,7 +75,7 @@ const reactStub = {
 // ---- collect plugin config ----
 await import(CLIENT.href);
 const captured = globalThis.__captured;
-check('module registers through __ModuleLoader__', !!captured && captured.id === '@local/work-dashboard', captured && captured.id);
+check('module registers through __ModuleLoader__', !!captured && captured.id === 'dsh-work-dashboard', captured && captured.id);
 const plugin = captured.factory((name) => {
   if (name === 'react') return reactStub;
   throw new Error(`unexpected require: ${name}`);
