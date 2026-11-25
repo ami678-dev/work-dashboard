@@ -1,6 +1,6 @@
 {
   "name": "dsh-work-dashboard",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "scripts": {
     "test": "node test/smoke.test.mjs"

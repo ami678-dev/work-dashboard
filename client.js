@@ -29,7 +29,7 @@ window.__ModuleLoader__.load({
       'xiaomi/mimo-v2.6-pro': { input: 3, output: 6, cacheRead: 0.025, cacheWrite: 3 },
       'xiaomi/mimo-v2.6-pro-ultraspeed': { input: 30, output: 60, cacheRead: 0.25, cacheWrite: 30 },
     };
-    const BUILD_VERSION = '0.2.8';
+    const BUILD_VERSION = '0.2.9';
     const MIN_W = 216;
     const MIN_H = 84;
     const MAX_MARGIN = 16;
@@ -818,8 +818,10 @@ window.__ModuleLoader__.load({
               title: t('hitRate'),
               'aria-label': hitRate === null ? t('hitRate') : `${t('hitRate')} ${hitRate}%`,
             },
-              h('span', { className: 'wdb-chip-icon' }, h(PercentIcon)),
-              hitText
+              // Chinese/percent notation reads "97%" — the icon is the sign,
+              // so it follows the number instead of leading it.
+              hitText,
+              h('span', { className: 'wdb-chip-icon' }, h(PercentIcon))
             )
           ),
           h('button', {
