@@ -295,7 +295,7 @@ check('account watch opened once', state.watchCalls === 1, String(state.watchCal
 check('both account frame shapes trigger a balance read', state.balanceCalls.length === 2,
   String(state.balanceCalls.length));
 check('getBalance carries build version and locale', state.balanceCalls.length > 0
-  && state.balanceCalls[0].version === '0.2.7'
+  && state.balanceCalls[0].version === '0.2.8'
   && state.balanceCalls[0].locale === 'en'
   && state.balanceCalls[0].timezoneOffsetSeconds === -new Date().getTimezoneOffset() * 60,
 JSON.stringify(state.balanceCalls[0] || null));
@@ -414,7 +414,11 @@ check('panel is content-sized and pinned by its top-right corner', (() => {
 const chips = findAll(tree, (node) => node.props && node.props.className === 'wdb-chip', []);
 const chipText = chips.map((chip) => collectText(chip, []).join('')).join('|');
 check('elapsed chip shows seconds', chipText.includes('0s'), chipText);
-check('hit-rate chip shows a percentage', chipText.includes('88%'), chipText);
+check('hit-rate chip shows the number without a duplicated percent sign',
+  chipText.includes('88') && !chipText.includes('%'), chipText);
+const hitChip = chips.find((chip) => collectText(chip, []).join('').includes('88'));
+check('hit-rate chip keeps the percentage in its accessible label', !!hitChip
+  && hitChip.props['aria-label'] === 'Cache hit 88%', hitChip ? String(hitChip.props['aria-label']) : 'chip missing');
 const gauge = findNode(tree, (node) => node.props && node.props.role === 'img');
 check('speed gauge exposes its value', gauge && gauge.props['aria-label'] === 'Speed 0.0 t/s', gauge ? gauge.props['aria-label'] : 'gauge missing');
 check('gauge pivot gets a breathing halo while work runs', !!gauge

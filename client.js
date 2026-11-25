@@ -29,7 +29,7 @@ window.__ModuleLoader__.load({
       'xiaomi/mimo-v2.6-pro': { input: 3, output: 6, cacheRead: 0.025, cacheWrite: 3 },
       'xiaomi/mimo-v2.6-pro-ultraspeed': { input: 30, output: 60, cacheRead: 0.25, cacheWrite: 30 },
     };
-    const BUILD_VERSION = '0.2.7';
+    const BUILD_VERSION = '0.2.8';
     const MIN_W = 216;
     const MIN_H = 84;
     const MAX_MARGIN = 16;
@@ -202,7 +202,7 @@ window.__ModuleLoader__.load({
 .wdb-gauge[data-running="true"] .wdb-gauge-pulse{animation:wdb-hub-pulse 1.8s ease-in-out infinite}
 @keyframes wdb-hub-pulse{0%,100%{opacity:.06;transform:scale(1)}50%{opacity:.4;transform:scale(2.4)}}
 .wdb-gauge-value{position:absolute;left:0;right:0;top:12px;text-align:center;font-size:13px;line-height:17px;font-weight:600;font-variant-numeric:tabular-nums}
-.wdb-gauge-unit{position:absolute;left:0;right:0;top:35px;text-align:center;font-size:8px;line-height:11px;color:var(--dsw-alias-label-secondary)}
+.wdb-gauge-unit{position:absolute;left:0;right:0;top:37px;text-align:center;font-size:8px;line-height:11px;color:var(--dsw-alias-label-secondary)}
 .wdb-metrics{display:flex;flex-direction:column;gap:2px;min-width:0}
 .wdb-metric{display:flex;align-items:baseline;justify-content:space-between;gap:4px;min-height:14px}
 .wdb-metric-label{font-size:9px;line-height:12px;color:var(--dsw-alias-label-secondary);letter-spacing:.02em;flex:none}
@@ -545,11 +545,14 @@ window.__ModuleLoader__.load({
 
       const tag = props.localeTag ? props.localeTag() : undefined;
       const rows = snap.sessions.rows || [];
-      const running = rows.some((row) => row.running);
+      const runningRows = rows.filter((row) => row.running);
+      const running = runningRows.length > 0;
       const totals = sumUsage(rows);
       const speed = Number(snap.speed) || 0;
       const elapsed = Number(snap.elapsedSec) || 0;
-      const hitRate = totals.hit;
+      // While work runs, describe that work: the fleet-wide lifetime ratio is
+      // dominated by old DeepSeek sessions and barely moves on a local model.
+      const hitRate = running ? sumUsage(runningRows).hit : totals.hit;
       // `geo` holds the badge anchor; the panel is always derived from it.
       const rect = fitGeo(panelRect(geo));
 
@@ -714,7 +717,9 @@ window.__ModuleLoader__.load({
         return dash(t('loading'));
       })();
 
-      const hitText = hitRate === null ? '—' : `${hitRate}%`;
+      // The percent sign is already drawn by PercentIcon; repeating it in the
+      // text rendered "% 97%".
+      const hitText = hitRate === null ? '—' : String(hitRate);
 
       // Models actually seen in the fleet, so the price editor lists only what the
       // user needs to fill in. DeepSeek is covered by the real balance and local
@@ -808,7 +813,11 @@ window.__ModuleLoader__.load({
               h('span', { className: 'wdb-chip-icon' }, h(ClockIcon)),
               t('seconds', { count: elapsed })
             ),
-            h('span', { className: 'wdb-chip', title: t('hitRate') },
+            h('span', {
+              className: 'wdb-chip',
+              title: t('hitRate'),
+              'aria-label': hitRate === null ? t('hitRate') : `${t('hitRate')} ${hitRate}%`,
+            },
               h('span', { className: 'wdb-chip-icon' }, h(PercentIcon)),
               hitText
             )
